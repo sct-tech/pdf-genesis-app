@@ -97,33 +97,46 @@ void main() {
 
   test('Usage reports the stored-document limit', () {
     final usage = Usage.fromJson({
-      'plan': 'FREE',
       'documents': {'used': 3, 'limit': 3},
       'today': {'pdfUploads': 1, 'aiChats': 12, 'summaries': 2},
     });
     expect(usage.atDocumentLimit, isTrue);
     expect(usage.documentsFraction, 1);
     expect(usage.aiChatsToday, 12);
+    // An API that reports no allowance leaves the count unknown
+    expect(usage.questionsLeft, isNull);
   });
 
-  test('AppUser falls back sensibly for guests and missing names', () {
-    final guest = AppUser.fromJson({
-      'id': 'g',
-      'isGuest': true,
-      'plan': 'FREE',
+  test('Usage reads the daily question allowance', () {
+    final usage = Usage.fromJson({
+      'documents': {'used': 1, 'limit': 3},
+      'today': {'pdfUploads': 1, 'aiChats': 2, 'summaries': 0},
+      'limits': {
+        'questions': {'used': 2, 'limit': 3, 'remaining': 1},
+        'aiMaxPages': 100,
+      },
     });
-    expect(guest.displayName, 'Guest');
-    expect(guest.isPro, isFalse);
+    expect(usage.questionsLeft, 1);
+    expect(usage.questionsLimit, 3);
+  });
 
-    final pro = AppUser.fromJson({
+  test('AppUser falls back sensibly for missing names', () {
+    final named = AppUser.fromJson({
+      'id': 'u',
+      'name': 'Milan Patel',
+      'email': 'milan@example.com',
+    });
+    expect(named.displayName, 'Milan Patel');
+    expect(named.firstName, 'Milan');
+
+    final unnamed = AppUser.fromJson({
       'id': 'u',
       'name': '  ',
       'email': 'milan@example.com',
-      'isGuest': false,
-      'plan': 'PRO',
     });
-    expect(pro.displayName, 'milan@example.com');
-    expect(pro.planLabel, 'Pro plan');
+    expect(unnamed.displayName, 'milan@example.com');
+
+    expect(AppUser.fromJson({'id': 'u'}).displayName, 'Account');
   });
 
   group('formatters', () {

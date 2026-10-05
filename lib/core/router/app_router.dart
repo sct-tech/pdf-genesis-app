@@ -13,7 +13,6 @@ import '../../features/documents/presentation/summary_screen.dart';
 import '../../features/documents/presentation/upload_screen.dart';
 import '../../features/home/presentation/home_screen.dart';
 import '../../features/home/presentation/home_shell.dart';
-import '../../features/profile/presentation/pro_screen.dart';
 import '../../features/profile/presentation/profile_screen.dart';
 import '../../features/profile/presentation/settings_screen.dart';
 import '../../features/viewer/presentation/pdf_viewer_screen.dart';
@@ -103,9 +102,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/settings',
         builder: (context, state) => const SettingsScreen(),
-      ),
-      GoRoute(path: '/pro', builder: (context, state) => const ProScreen()),
-    ],
+      ),    ],
   );
 
   // An expired session (refresh token rejected) sends the user to login

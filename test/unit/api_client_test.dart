@@ -176,7 +176,7 @@ void main() {
           'success': false,
           'status': 403,
           'name': 'DocumentLimitReached',
-          'message': 'Free plan allows 3 PDFs. Delete one or upgrade to Pro.',
+          'message': 'You can keep 3 PDFs. Delete one to upload another.',
         },
       ),
     );

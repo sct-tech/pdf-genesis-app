@@ -151,6 +151,35 @@ void main() {
   });
 
   group('viewer bars', () {
+    testWidgets('a bar under the page leaves the page its height', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final session = EditSession();
+      addTearDown(session.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: Scaffold(
+            body: const SizedBox.expand(key: ValueKey('page')),
+            bottomNavigationBar: ContentWidth.bar(
+              child: EditToolBar(session: session, onSelect: (_) {}),
+            ),
+          ),
+        ),
+      );
+
+      final page = tester.getRect(find.byKey(const ValueKey('page')));
+      final bar = tester.getRect(find.byType(EditToolBar));
+      expect(bar.height, lessThan(80));
+      expect(bar.bottom, 844);
+      // The bar must not swallow the screen: the page keeps the rest
+      expect(page.height, greaterThan(700));
+    });
+
     Future<void> pumpBar(WidgetTester tester, Size size, Widget bar) {
       tester.view.physicalSize = size;
       tester.view.devicePixelRatio = 1;
@@ -166,7 +195,7 @@ void main() {
           home: Scaffold(
             body: Padding(
               padding: const EdgeInsets.all(16),
-              child: ContentWidth(maxWidth: ContentWidths.toolbar, child: bar),
+              child: ContentWidth.bar(child: bar),
             ),
           ),
         ),
@@ -184,7 +213,6 @@ void main() {
           onEdit: () {},
           onShare: () {},
           onAskAi: () {},
-          askAiLocked: true,
         ),
       );
 

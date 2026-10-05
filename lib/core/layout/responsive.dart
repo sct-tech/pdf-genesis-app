@@ -48,19 +48,30 @@ abstract final class ContentWidths {
 /// Centres [child] and stops it growing past [maxWidth], so a phone layout
 /// does not stretch edge to edge on a tablet.
 class ContentWidth extends StatelessWidget {
+  /// For a screen body: fills the height it is given.
   const ContentWidth({
     super.key,
     required this.child,
     this.maxWidth = ContentWidths.reading,
-  });
+  }) : _fillHeight = true;
+
+  /// For a tool bar: only as tall as [child]. A bar that filled the height
+  /// would take the whole screen when used as a bottom navigation bar.
+  const ContentWidth.bar({
+    super.key,
+    required this.child,
+    this.maxWidth = ContentWidths.toolbar,
+  }) : _fillHeight = false;
 
   final Widget child;
   final double maxWidth;
+  final bool _fillHeight;
 
   @override
   Widget build(BuildContext context) {
     return Align(
       alignment: Alignment.topCenter,
+      heightFactor: _fillHeight ? null : 1,
       child: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: maxWidth),
         child: child,

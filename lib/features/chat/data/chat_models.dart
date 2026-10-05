@@ -55,6 +55,7 @@ class ChatReply {
     required this.userMessage,
     required this.assistantMessage,
     required this.followUpQuestions,
+    this.questionsLeftToday,
   });
 
   factory ChatReply.fromJson(Map<String, dynamic> json) {
@@ -70,10 +71,14 @@ class ChatReply {
             in (json['followUpQuestions'] as List<dynamic>? ?? const []))
           question as String,
       ],
+      questionsLeftToday: json['questionsLeftToday'] as int?,
     );
   }
 
   final ChatMessage userMessage;
   final ChatMessage assistantMessage;
   final List<String> followUpQuestions;
+
+  /// What is left of the daily allowance after this question.
+  final int? questionsLeftToday;
 }

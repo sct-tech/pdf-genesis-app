@@ -36,15 +36,9 @@ class AuthRepository {
     return Usage.fromJson(data as Map<String, dynamic>);
   }
 
-  Future<AppUser> continueAsGuest() async =>
-      _storeSession(await _api.post('/auth/guest'));
-
   /// Runs Google Sign-In and exchanges the ID token for a session.
   /// Returns null when the user dismisses the account picker.
-  ///
-  /// When [carryOverGuest] is set, the current guest session's documents and
-  /// conversations move to the Google account.
-  Future<AppUser?> signInWithGoogle({required bool carryOverGuest}) async {
+  Future<AppUser?> signInWithGoogle() async {
     final google = GoogleSignIn.instance;
     if (!_googleReady) {
       await google.initialize(
@@ -74,14 +68,8 @@ class AuthRepository {
       );
     }
 
-    // The refresh token, not the access token: the latter expires within the
-    // hour and the API would then sign in without carrying anything over.
-    final guestToken = carryOverGuest ? await _tokens.refreshToken : null;
     return _storeSession(
-      await _api.post(
-        '/auth/google',
-        body: {'idToken': idToken, 'guestToken': guestToken},
-      ),
+      await _api.post('/auth/google', body: {'idToken': idToken}),
     );
   }
 

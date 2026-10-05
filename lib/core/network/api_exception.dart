@@ -19,6 +19,15 @@ class ApiException implements Exception {
 
   bool get isUnauthorized => status == 401;
 
+  /// The day's allowance for this action is used up.
+  bool get isDailyLimit => name == 'DailyLimitReached';
+
+  /// Sending the same request again today cannot succeed.
+  bool get isFinalForToday =>
+      isDailyLimit ||
+      name == 'DocumentTooLargeForAi' ||
+      name == 'AiBudgetReached';
+
   @override
   String toString() => message;
 }

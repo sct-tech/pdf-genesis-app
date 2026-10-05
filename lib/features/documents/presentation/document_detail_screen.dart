@@ -8,8 +8,8 @@ import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/app_widgets.dart';
-import '../../chat/application/ask_ai_access.dart';
-import '../../chat/presentation/ask_ai_sign_in.dart';
+import '../../auth/application/auth_controller.dart';
+import '../application/ai_limits.dart';
 import '../data/document.dart';
 import '../data/documents_repository.dart';
 import 'document_widgets.dart';
@@ -114,15 +114,14 @@ class _Body extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final text = Theme.of(context).textTheme;
-    final questions = ref.watch(suggestedQuestionsProvider(document.id));
-    final canAskAi = ref.watch(askAiAvailableProvider);
+    // Opening this screen makes no AI request: the questions shown are the
+    // ones stored once the document has been used with Ask AI
+    final usage = ref.watch(usageProvider).value;
+    final askAiBlocked = askAiBlockedReason(document, usage);
+    final summaryBlocked = summaryBlockedReason(document, usage);
 
     // Coming back from chat should show the conversation just had
     Future<void> openChat({String? conversationId, String? question}) async {
-      if (!canAskAi) {
-        await showAskAiSignInSheet(context, ref);
-        return;
-      }
       await context.push(
         Routes.chat(
           document.id,
@@ -173,76 +172,63 @@ class _Body extends ConsumerWidget {
         ),
         const SizedBox(height: 16),
         FilledButton.icon(
-          onPressed: canAskAi ? openChat : null,
-          icon: Icon(
-            canAskAi
-                ? Icons.chat_bubble_outline_rounded
-                : Icons.lock_outline_rounded,
-          ),
+          onPressed: askAiBlocked == null ? openChat : null,
+          icon: const Icon(Icons.chat_bubble_outline_rounded),
           label: const Text('Ask Anything'),
         ),
-        if (!canAskAi) ...[const SizedBox(height: 8), const AskAiSignInHint()],
         const SizedBox(height: 12),
         OutlinedButton.icon(
-          onPressed: () => context.push(Routes.summary(document.id)),
+          onPressed: summaryBlocked == null
+              ? () => context.push(Routes.summary(document.id))
+              : null,
           icon: const Icon(Icons.auto_awesome_outlined),
           label: Text(
             document.hasSummary ? 'View Summary' : 'Generate Summary',
           ),
         ),
+        if (summaryBlocked != null) ...[
+          const SizedBox(height: 6),
+          _LimitNote(text: summaryBlocked),
+        ],
         const SizedBox(height: 12),
         OutlinedButton.icon(
           onPressed: () => openViewer(context, ref, document.id),
           icon: const Icon(Icons.picture_as_pdf_outlined),
           label: const Text('View & Edit PDF'),
         ),
-        const SizedBox(height: 24),
-        Text('Suggested questions', style: text.titleLarge),
-        const SizedBox(height: 10),
-        questions.when(
-          loading: () => const Padding(
-            padding: EdgeInsets.symmetric(vertical: 16),
-            child: Center(child: CircularProgressIndicator()),
-          ),
-          error: (error, _) => Text(
-            'Suggested questions are not available right now.',
-            style: text.bodySmall,
-          ),
-          data: (items) => items.isEmpty
-              ? Text('No suggestions for this document.', style: text.bodySmall)
-              : Column(
+        if (document.suggestedQuestions.isNotEmpty) ...[
+          const SizedBox(height: 24),
+          Text('Suggested questions', style: text.titleLarge),
+          const SizedBox(height: 10),
+          for (final question in document.suggestedQuestions)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: AppCard(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
+                onTap: askAiBlocked == null
+                    ? () => openChat(question: question)
+                    : null,
+                child: Row(
                   children: [
-                    for (final question in items)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: AppCard(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 12,
-                          ),
-                          onTap: () => openChat(question: question),
-                          child: Row(
-                            children: [
-                              const Icon(
-                                Icons.auto_awesome,
-                                size: 18,
-                                color: AppColors.primary,
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Text(question, style: text.bodyMedium),
-                              ),
-                              const Icon(
-                                Icons.chevron_right_rounded,
-                                color: AppColors.textSubtle,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
+                    const Icon(
+                      Icons.auto_awesome,
+                      size: 18,
+                      color: AppColors.primary,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(child: Text(question, style: text.bodyMedium)),
+                    const Icon(
+                      Icons.chevron_right_rounded,
+                      color: AppColors.textSubtle,
+                    ),
                   ],
                 ),
-        ),
+              ),
+            ),
+        ],
         if (document.recentConversations.isNotEmpty) ...[
           const SizedBox(height: 16),
           Text('Recent conversations', style: text.titleLarge),
@@ -311,6 +297,39 @@ class _Meta extends StatelessWidget {
           Text(label, style: text.bodySmall),
         ],
       ),
+    );
+  }
+}
+
+/// Explains, under a switched-off button, why it is off.
+class _LimitNote extends StatelessWidget {
+  const _LimitNote({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.only(top: 1),
+          child: Icon(
+            Icons.schedule_rounded,
+            size: 15,
+            color: AppColors.textSecondary,
+          ),
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            text,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

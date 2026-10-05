@@ -18,6 +18,9 @@ Future<void> main() async {
   runApp(
     ProviderScope(
       overrides: [appPrefsProvider.overrideWithValue(AppPrefs(prefs))],
+      // A failed request is shown with its own retry button. Retrying behind
+      // the user's back would keep a refusal looking like loading.
+      retry: (retryCount, error) => null,
       child: const PdfGenesisApp(),
     ),
   );
@@ -36,7 +39,7 @@ class _PdfGenesisAppState extends ConsumerState<PdfGenesisApp> {
     super.initState();
     ref.read(adsProvider).initialize();
     // Someone else may use this device next: nothing of the previous
-    // account's stays behind. A guest upgrading to Google keeps the same id.
+    // account's stays behind.
     ref.listenManual(currentUserProvider.select((user) => user?.id), (
       previous,
       next,

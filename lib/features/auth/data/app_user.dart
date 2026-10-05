@@ -1,8 +1,6 @@
 class AppUser {
   const AppUser({
     required this.id,
-    required this.isGuest,
-    required this.isPro,
     this.name,
     this.email,
     this.avatarUrl,
@@ -14,8 +12,6 @@ class AppUser {
       name: json['name'] as String?,
       email: json['email'] as String?,
       avatarUrl: json['avatarUrl'] as String?,
-      isGuest: (json['isGuest'] as bool?) ?? false,
-      isPro: json['plan'] == 'PRO',
     );
   }
 
@@ -23,21 +19,17 @@ class AppUser {
   final String? name;
   final String? email;
   final String? avatarUrl;
-  final bool isGuest;
-  final bool isPro;
 
   String get displayName {
-    if (isGuest) return 'Guest';
     final trimmed = name?.trim() ?? '';
     return trimmed.isEmpty ? (email ?? 'Account') : trimmed;
   }
 
   String get firstName => displayName.split(' ').first;
-
-  String get planLabel => isPro ? 'Pro plan' : 'Free plan';
 }
 
-/// Stored documents against the plan cap, plus today's activity counters.
+/// Stored documents against the storage cap, plus today's activity counters
+/// and what is left of the daily Ask AI allowance.
 class Usage {
   const Usage({
     required this.documentsUsed,
@@ -45,17 +37,28 @@ class Usage {
     required this.pdfUploadsToday,
     required this.aiChatsToday,
     required this.summariesToday,
+    this.questionsLeft,
+    this.questionsLimit,
+    this.summariesLeft,
+    this.aiMaxPages,
   });
 
   factory Usage.fromJson(Map<String, dynamic> json) {
     final documents = json['documents'] as Map<String, dynamic>;
     final today = json['today'] as Map<String, dynamic>;
+    final limits = json['limits'] as Map<String, dynamic>?;
+    final questions = limits?['questions'] as Map<String, dynamic>?;
+    final summaries = limits?['summaries'] as Map<String, dynamic>?;
     return Usage(
       documentsUsed: documents['used'] as int,
       documentsLimit: documents['limit'] as int,
       pdfUploadsToday: today['pdfUploads'] as int,
       aiChatsToday: today['aiChats'] as int,
       summariesToday: today['summaries'] as int,
+      questionsLeft: questions?['remaining'] as int?,
+      questionsLimit: questions?['limit'] as int?,
+      summariesLeft: summaries?['remaining'] as int?,
+      aiMaxPages: limits?['aiMaxPages'] as int?,
     );
   }
 
@@ -64,6 +67,17 @@ class Usage {
   final int pdfUploadsToday;
   final int aiChatsToday;
   final int summariesToday;
+
+  /// Questions the user can still ask today. Null when the API does not
+  /// report an allowance.
+  final int? questionsLeft;
+  final int? questionsLimit;
+
+  /// New summaries the user can still generate today.
+  final int? summariesLeft;
+
+  /// Longest PDF, in pages, that Ask AI and summaries accept.
+  final int? aiMaxPages;
 
   bool get atDocumentLimit => documentsUsed >= documentsLimit;
 

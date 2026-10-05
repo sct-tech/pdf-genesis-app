@@ -11,8 +11,6 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../application/auth_controller.dart';
 
-enum _Pending { none, google, guest }
-
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
@@ -21,7 +19,7 @@ class LoginScreen extends ConsumerStatefulWidget {
 }
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
-  _Pending _pending = _Pending.none;
+  bool _signingIn = false;
 
   late final _termsTap = TapGestureRecognizer()
     ..onTap = () => openExternalUrl(context, AppConfig.termsUrl);
@@ -35,34 +33,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     super.dispose();
   }
 
-  Future<void> _run(_Pending kind, Future<bool> Function() action) async {
-    setState(() => _pending = kind);
+  Future<void> _google() async {
+    setState(() => _signingIn = true);
     try {
-      final signedIn = await action();
+      final signedIn = await ref
+          .read(authControllerProvider.notifier)
+          .signInWithGoogle();
       if (signedIn && mounted) context.go(Routes.home);
     } catch (error) {
       if (mounted) showAppSnackBar(context, errorMessage(error));
     } finally {
-      if (mounted) setState(() => _pending = _Pending.none);
+      if (mounted) setState(() => _signingIn = false);
     }
   }
-
-  void _google() => _run(_Pending.google, () async {
-    final outcome = await ref
-        .read(authControllerProvider.notifier)
-        .signInWithGoogle();
-    return outcome != GoogleSignInOutcome.cancelled;
-  });
-
-  void _guest() => _run(_Pending.guest, () async {
-    await ref.read(authControllerProvider.notifier).continueAsGuest();
-    return true;
-  });
 
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
-    final busy = _pending != _Pending.none;
     const link = TextStyle(
       color: AppColors.textPrimary,
       fontWeight: FontWeight.w600,
@@ -112,8 +99,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                     const SizedBox(height: 32),
                     OutlinedButton(
-                      onPressed: busy ? null : _google,
-                      child: _pending == _Pending.google
+                      onPressed: _signingIn ? null : _google,
+                      child: _signingIn
                           ? const _ButtonSpinner()
                           : const Row(
                               mainAxisAlignment: MainAxisAlignment.center,
@@ -121,24 +108,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 _GoogleMark(),
                                 SizedBox(width: 12),
                                 Flexible(child: Text('Continue with Google')),
-                              ],
-                            ),
-                    ),
-                    const SizedBox(height: 12),
-                    OutlinedButton(
-                      onPressed: busy ? null : _guest,
-                      style: OutlinedButton.styleFrom(
-                        backgroundColor: AppColors.primaryTint,
-                        side: BorderSide.none,
-                      ),
-                      child: _pending == _Pending.guest
-                          ? const _ButtonSpinner()
-                          : const Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.person_outline_rounded, size: 20),
-                                SizedBox(width: 10),
-                                Flexible(child: Text('Continue as Guest')),
                               ],
                             ),
                     ),

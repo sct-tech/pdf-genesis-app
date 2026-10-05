@@ -9,7 +9,6 @@ class Routes {
   static const documents = '/documents';
   static const upload = '/upload';
   static const settings = '/settings';
-  static const pro = '/pro';
 
   static String document(String id) => '/documents/$id';
 

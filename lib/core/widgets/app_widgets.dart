@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../theme/app_colors.dart';
+import 'brand_mark.dart';
 
-/// Gradient tile with the document-and-sparkle mark.
+/// The PDF Genesis mark on its gradient tile, with a soft brand shadow.
 class AppLogo extends StatelessWidget {
   const AppLogo({super.key, this.size = 56});
 
@@ -11,38 +12,26 @@ class AppLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        gradient: AppColors.brandGradient,
-        borderRadius: BorderRadius.circular(size * 0.28),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.25),
-            blurRadius: size * 0.3,
-            offset: Offset(0, size * 0.12),
+    return Semantics(
+      label: 'PDF Genesis',
+      image: true,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(
+            size * BrandMarkPainter.cornerRadius,
           ),
-        ],
-      ),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Icon(
-            Icons.description_rounded,
-            color: Colors.white,
-            size: size * 0.52,
-          ),
-          Positioned(
-            top: size * 0.14,
-            right: size * 0.14,
-            child: Icon(
-              Icons.auto_awesome,
-              color: Colors.white,
-              size: size * 0.22,
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primary.withValues(alpha: 0.25),
+              blurRadius: size * 0.3,
+              offset: Offset(0, size * 0.12),
             ),
-          ),
-        ],
+          ],
+        ),
+        child: CustomPaint(
+          size: Size.square(size),
+          painter: const BrandMarkPainter(),
+        ),
       ),
     );
   }
@@ -103,7 +92,7 @@ class PdfTile extends StatelessWidget {
   }
 }
 
-/// Small pill used for status and plan labels.
+/// Small pill used for status labels and page references.
 class Pill extends StatelessWidget {
   const Pill({
     super.key,

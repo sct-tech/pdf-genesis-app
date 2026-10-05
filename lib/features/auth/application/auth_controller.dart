@@ -8,17 +8,6 @@ import '../../../core/services/analytics_service.dart';
 import '../data/app_user.dart';
 import '../data/auth_repository.dart';
 
-enum GoogleSignInOutcome {
-  /// The user closed the Google account picker.
-  cancelled,
-
-  /// Signed in to a Google account.
-  signedIn,
-
-  /// The guest session became the Google account, keeping its documents.
-  guestUpgraded,
-}
-
 /// The signed-in user, or null when signed out.
 ///
 /// `build` restores the stored session on launch. It stays in the error state
@@ -50,24 +39,13 @@ class AuthController extends AsyncNotifier<AppUser?> {
     return user;
   }
 
-  Future<void> continueAsGuest() async {
-    final user = await _repository.continueAsGuest();
-    ref.read(analyticsProvider).logEvent('login', {'method': 'guest'});
-    state = AsyncData(_signedIn(user));
-  }
-
-  Future<GoogleSignInOutcome> signInWithGoogle() async {
-    final guest = state.value;
-    final wasGuest = guest?.isGuest ?? false;
-    final user = await _repository.signInWithGoogle(carryOverGuest: wasGuest);
-    if (user == null) return GoogleSignInOutcome.cancelled;
+  /// Returns false when the user closed the Google account picker.
+  Future<bool> signInWithGoogle() async {
+    final user = await _repository.signInWithGoogle();
+    if (user == null) return false;
     ref.read(analyticsProvider).logEvent('login', {'method': 'google'});
     state = AsyncData(_signedIn(user));
-    // The API upgrades the guest row in place, so the id survives. A Google
-    // account that already existed keeps its own id and its own documents.
-    return wasGuest && user.id == guest?.id
-        ? GoogleSignInOutcome.guestUpgraded
-        : GoogleSignInOutcome.signedIn;
+    return true;
   }
 
   Future<void> signOut() async {
@@ -93,7 +71,7 @@ final currentUserProvider = Provider<AppUser?>(
 );
 
 final usageProvider = FutureProvider.autoDispose<Usage>((ref) {
-  // Re-fetch when the account changes (guest to Google, sign-out)
+  // Re-fetch when the account changes (sign-out, another account)
   ref.watch(currentUserProvider.select((user) => user?.id));
   return ref.watch(authRepositoryProvider).fetchUsage();
 });

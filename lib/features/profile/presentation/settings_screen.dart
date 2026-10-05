@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../core/layout/responsive.dart';
-import '../../../core/router/routes.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_colors.dart';
@@ -92,21 +90,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               const _SectionLabel('ACCOUNT'),
               AppCard(
                 padding: EdgeInsets.zero,
-                child: Column(
-                  children: [
-                    _Row(
-                      label: 'Signed in as',
-                      value: user.isGuest ? 'Guest' : (user.email ?? '-'),
-                    ),
-                    const Divider(),
-                    _Row(
-                      label: 'Plan',
-                      value: user.isPro ? 'Pro' : 'Free',
-                      actionLabel: user.isPro ? null : 'Upgrade',
-                      onTap: user.isPro ? null : () => context.push(Routes.pro),
-                    ),
-                  ],
-                ),
+                child: _Row(label: 'Signed in as', value: user.email ?? '-'),
               ),
               const _SectionLabel('DATA'),
               AppCard(
@@ -185,14 +169,12 @@ class _Row extends StatelessWidget {
   const _Row({
     required this.label,
     this.value,
-    this.actionLabel,
     this.chevron = false,
     this.onTap,
   });
 
   final String label;
   final String? value;
-  final String? actionLabel;
   final bool chevron;
   final VoidCallback? onTap;
 
@@ -221,13 +203,6 @@ class _Row extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-              ),
-            ],
-            if (actionLabel != null) ...[
-              const SizedBox(width: 10),
-              Text(
-                actionLabel!,
-                style: text.labelLarge?.copyWith(color: AppColors.primary),
               ),
             ],
             if (chevron)

@@ -6,6 +6,8 @@ import 'package:pdf_genesis/core/network/api_exception.dart';
 import 'package:pdf_genesis/core/storage/app_prefs.dart';
 import 'package:pdf_genesis/features/auth/application/auth_controller.dart';
 import 'package:pdf_genesis/features/auth/data/app_user.dart';
+import 'package:pdf_genesis/features/auth/presentation/login_screen.dart';
+import 'package:pdf_genesis/features/chat/data/chat_repository.dart';
 import 'package:pdf_genesis/features/chat/presentation/chat_screen.dart';
 import 'package:pdf_genesis/features/documents/data/document.dart';
 import 'package:pdf_genesis/features/documents/data/documents_repository.dart';
@@ -15,7 +17,6 @@ import 'package:pdf_genesis/features/documents/presentation/processing_screen.da
 import 'package:pdf_genesis/features/documents/presentation/summary_screen.dart';
 import 'package:pdf_genesis/features/documents/presentation/upload_screen.dart';
 import 'package:pdf_genesis/features/home/presentation/home_screen.dart';
-import 'package:pdf_genesis/features/profile/presentation/pro_screen.dart';
 import 'package:pdf_genesis/features/profile/presentation/profile_screen.dart';
 import 'package:pdf_genesis/features/profile/presentation/settings_screen.dart';
 import 'package:pdf_genesis/main.dart';
@@ -72,9 +73,17 @@ void main() {
     await tester.tap(find.text('Get Started'));
     await tester.pumpAndSettle();
     expect(find.text('Continue with Google'), findsOneWidget);
-    expect(find.text('Continue as Guest'), findsOneWidget);
     expect(find.textContaining('Apple'), findsNothing);
     expect(prefs.getBool('onboarding_seen'), isTrue);
+  });
+
+  testWidgets('Login offers Google sign-in as the only way in', (tester) async {
+    await pumpScreen(tester, const LoginScreen(), overrides: [_auth(null)]);
+
+    expect(find.text('Continue with Google'), findsOneWidget);
+    expect(find.bySubtype<ButtonStyleButton>(), findsOneWidget);
+    expect(find.text('Continue as Guest'), findsNothing);
+    expect(find.textContaining('Guest'), findsNothing);
   });
 
   testWidgets('a returning signed-in user lands on Home with three tabs', (
@@ -277,10 +286,12 @@ void main() {
       const DocumentDetailScreen(documentId: 'doc-1'),
       overrides: [
         _auth(googleUser),
-        documentDetailProvider.overrideWith((ref, id) async => document()),
-        suggestedQuestionsProvider.overrideWith(
-          (ref, id) async => ['What is this document about?'],
+        documentDetailProvider.overrideWith(
+          (ref, id) async => document(
+            suggestedQuestions: ['What is this document about?'],
+          ),
         ),
+        usageProvider.overrideWith((ref) async => _usage),
       ],
     );
     await tester.pump();
@@ -288,26 +299,93 @@ void main() {
     expect(find.text('Pages'), findsOneWidget);
     expect(find.text('42'), findsOneWidget);
     expect(find.text('12.0 MB'), findsOneWidget);
-    expect(find.text('Ask Anything'), findsOneWidget);
+    final ask = tester.widget<FilledButton>(
+      find.ancestor(
+        of: find.text('Ask Anything'),
+        matching: find.bySubtype<FilledButton>(),
+      ),
+    );
+    expect(ask.onPressed, isNotNull);
+    expect(find.byIcon(Icons.lock_outline_rounded), findsNothing);
     expect(find.text('Generate Summary'), findsOneWidget);
+    expect(find.text('View & Edit PDF'), findsOneWidget);
     expect(find.text('What is this document about?'), findsOneWidget);
   });
 
-  testWidgets('for a guest, Ask Anything is disabled with a log-in hint', (
-    tester,
+  OutlinedButton summaryButton(WidgetTester tester, String label) =>
+      tester.widget<OutlinedButton>(
+        find.ancestor(
+          of: find.text(label),
+          matching: find.bySubtype<OutlinedButton>(),
+        ),
+      );
+
+  Usage usageWith({int summariesLeft = 1}) => Usage(
+    documentsUsed: 1,
+    documentsLimit: 3,
+    pdfUploadsToday: 0,
+    aiChatsToday: 0,
+    summariesToday: 0,
+    questionsLeft: 3,
+    questionsLimit: 3,
+    summariesLeft: summariesLeft,
+    aiMaxPages: 100,
+  );
+
+  Future<void> pumpDetail(
+    WidgetTester tester,
+    Document shown,
+    Usage usage,
   ) async {
+    var questionRequests = 0;
     await pumpScreen(
       tester,
       const DocumentDetailScreen(documentId: 'doc-1'),
       overrides: [
-        _auth(guestUser),
-        documentDetailProvider.overrideWith((ref, id) async => document()),
-        suggestedQuestionsProvider.overrideWith(
-          (ref, id) async => ['What is this document about?'],
-        ),
+        _auth(googleUser),
+        documentDetailProvider.overrideWith((ref, id) async => shown),
+        usageProvider.overrideWith((ref) async => usage),
+        suggestedQuestionsProvider.overrideWith((ref, id) async {
+          questionRequests += 1;
+          return const <String>[];
+        }),
       ],
     );
-    await tester.pump();
+    await tester.pumpAndSettle();
+    // Opening the screen must not prepare the document for AI
+    expect(questionRequests, 0);
+  }
+
+  testWidgets('Generate Summary is off once today\'s summary is used', (
+    tester,
+  ) async {
+    await pumpDetail(tester, document(), usageWith(summariesLeft: 0));
+
+    expect(summaryButton(tester, 'Generate Summary').onPressed, isNull);
+    expect(
+      find.text(
+        "You have used today's summary. A new one is available tomorrow.",
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Suggested questions'), findsNothing);
+  });
+
+  testWidgets('a summary that exists stays open after the limit', (
+    tester,
+  ) async {
+    await pumpDetail(
+      tester,
+      document(hasSummary: true),
+      usageWith(summariesLeft: 0),
+    );
+
+    expect(summaryButton(tester, 'View Summary').onPressed, isNotNull);
+    expect(find.textContaining("today's summary"), findsNothing);
+  });
+
+  testWidgets('a PDF over the page limit has AI switched off', (tester) async {
+    await pumpDetail(tester, document(pageCount: 240), usageWith());
 
     final ask = tester.widget<FilledButton>(
       find.ancestor(
@@ -316,38 +394,45 @@ void main() {
       ),
     );
     expect(ask.onPressed, isNull);
-    expect(find.textContaining('PDF Genesis Ask AI feature'), findsOneWidget);
-    expect(find.text('Log in'), findsOneWidget);
-    // The rest of the document stays available
-    expect(find.text('Generate Summary'), findsOneWidget);
-    expect(find.text('View & Edit PDF'), findsOneWidget);
-
-    // A suggested question explains the lock instead of opening the chat
-    await tester.tap(find.text('What is this document about?'));
-    await tester.pumpAndSettle();
-    expect(find.text('Sign in to use Ask AI'), findsOneWidget);
-    expect(find.text('Continue with Google'), findsOneWidget);
+    expect(summaryButton(tester, 'Generate Summary').onPressed, isNull);
+    expect(
+      find.text('Ask AI and summaries work with PDFs of up to 100 pages.'),
+      findsOneWidget,
+    );
+    // Reading and editing are unaffected
+    expect(summaryButton(tester, 'View & Edit PDF').onPressed, isNotNull);
   });
 
-  testWidgets(
-    'for a guest, the chat screen asks to sign in and sends nothing',
-    (tester) async {
-      await pumpScreen(
-        tester,
-        const ChatScreen(documentId: 'doc-1', initialQuestion: 'Any risks?'),
-        overrides: [
-          _auth(guestUser),
-          documentDetailProvider.overrideWith((ref, id) async => document()),
-        ],
-      );
-      await tester.pump();
+  testWidgets('a refused summary says why instead of loading', (tester) async {
+    await pumpScreen(
+      tester,
+      const SummaryScreen(documentId: 'doc-1'),
+      overrides: [
+        _auth(googleUser),
+        documentDetailProvider.overrideWith((ref, id) async => document()),
+        documentSummaryProvider.overrideWith(
+          (ref, id) async => throw const ApiException(
+            message:
+                "You have used today's summary. A new one is available tomorrow.",
+            name: 'DailyLimitReached',
+            status: 429,
+          ),
+        ),
+      ],
+    );
+    await tester.pumpAndSettle();
 
-      expect(find.text('Sign in to use Ask AI'), findsOneWidget);
-      expect(find.text('Continue with Google'), findsOneWidget);
-      expect(find.text('Ask anything from this PDF…'), findsNothing);
-      expect(find.text('Any risks?'), findsNothing);
-    },
-  );
+    expect(find.text('Generating summary…'), findsNothing);
+    expect(find.text('Daily limit reached'), findsOneWidget);
+    expect(
+      find.text(
+        "You have used today's summary. A new one is available tomorrow.",
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Try again'), findsNothing);
+    expect(find.text('Go back'), findsOneWidget);
+  });
 
   testWidgets('Summary shows both sections with copy and share', (
     tester,
@@ -385,13 +470,15 @@ void main() {
       const ChatScreen(documentId: 'doc-1'),
       overrides: [
         _auth(googleUser),
+        chatRepositoryProvider.overrideWithValue(FakeChatRepository()),
         documentDetailProvider.overrideWith((ref, id) async => document()),
         suggestedQuestionsProvider.overrideWith(
           (ref, id) async => ['What are the main risks mentioned?'],
         ),
       ],
     );
-    await tester.pump();
+    // The chat first looks for an earlier conversation to continue
+    await tester.pumpAndSettle();
 
     expect(find.text('Ask anything from this PDF…'), findsOneWidget);
     expect(find.text('What are the main risks mentioned?'), findsOneWidget);
@@ -399,7 +486,7 @@ void main() {
     expect(find.byTooltip('Send'), findsOneWidget);
   });
 
-  testWidgets('Profile shows plan, stored PDFs against the limit and upgrade', (
+  testWidgets('Profile shows the account and stored PDFs against the limit', (
     tester,
   ) async {
     await pumpScreen(
@@ -415,29 +502,11 @@ void main() {
 
     expect(find.text('Milan Patel'), findsOneWidget);
     expect(find.text('milan@example.com'), findsOneWidget);
-    expect(find.text('Free plan'), findsOneWidget);
-    expect(find.text('Upgrade to Pro'), findsOneWidget);
     expect(find.text('2 / 3'), findsOneWidget);
     expect(find.text('Settings'), findsOneWidget);
-  });
-
-  testWidgets('a guest is offered Google sign-in to keep documents', (
-    tester,
-  ) async {
-    await pumpScreen(
-      tester,
-      const ProfileScreen(),
-      overrides: [
-        _auth(guestUser),
-        usageProvider.overrideWith((ref) async => _usage),
-      ],
-    );
-    await tester.pump();
-    await tester.pump();
-
-    expect(find.text('Guest'), findsOneWidget);
-    expect(find.text('Keep your documents'), findsOneWidget);
-    expect(find.text('Continue with Google'), findsOneWidget);
+    expect(find.text('Sign out'), findsOneWidget);
+    expect(find.textContaining('plan'), findsNothing);
+    expect(find.textContaining('Upgrade'), findsNothing);
   });
 
   testWidgets('Settings lists account, data and about actions', (tester) async {
@@ -458,15 +527,5 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Delete all documents?'), findsOneWidget);
     expect(find.text('Cancel'), findsOneWidget);
-  });
-
-  testWidgets('Pro compares the 3 and 10 PDF limits', (tester) async {
-    await pumpScreen(tester, const ProScreen(), overrides: [_auth(googleUser)]);
-    await tester.pump();
-
-    expect(find.text('Store up to 10 PDFs'), findsOneWidget);
-    expect(find.text('Store up to 3 PDFs'), findsOneWidget);
-    expect(find.text('CURRENT'), findsOneWidget);
-    expect(find.text('Coming soon'), findsOneWidget);
   });
 }

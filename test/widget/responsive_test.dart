@@ -6,6 +6,7 @@ import 'package:pdf_genesis/features/auth/application/auth_controller.dart';
 import 'package:pdf_genesis/features/auth/data/app_user.dart';
 import 'package:pdf_genesis/features/auth/presentation/login_screen.dart';
 import 'package:pdf_genesis/features/auth/presentation/onboarding_screen.dart';
+import 'package:pdf_genesis/features/chat/data/chat_repository.dart';
 import 'package:pdf_genesis/features/chat/presentation/chat_screen.dart';
 import 'package:pdf_genesis/features/documents/data/document.dart';
 import 'package:pdf_genesis/features/documents/data/documents_repository.dart';
@@ -15,7 +16,6 @@ import 'package:pdf_genesis/features/documents/presentation/processing_screen.da
 import 'package:pdf_genesis/features/documents/presentation/summary_screen.dart';
 import 'package:pdf_genesis/features/documents/presentation/upload_screen.dart';
 import 'package:pdf_genesis/features/home/presentation/home_screen.dart';
-import 'package:pdf_genesis/features/profile/presentation/pro_screen.dart';
 import 'package:pdf_genesis/features/profile/presentation/profile_screen.dart';
 import 'package:pdf_genesis/features/profile/presentation/settings_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -65,6 +65,7 @@ void main() {
   List<Override> overrides(AppUser user) => [
     authControllerProvider.overrideWith(() => FakeAuthController(user)),
     appPrefsProvider.overrideWithValue(prefs),
+    chatRepositoryProvider.overrideWithValue(FakeChatRepository()),
     usageProvider.overrideWith((ref) async => _usage),
     recentDocumentsProvider.overrideWith((ref) async => _documents()),
     documentsListProvider.overrideWith((ref, query) async => _documents()),
@@ -95,7 +96,6 @@ void main() {
     'Onboarding': (googleUser, const OnboardingScreen()),
     'Login': (googleUser, const LoginScreen()),
     'Home': (googleUser, const HomeScreen()),
-    'Home as a guest': (guestUser, const HomeScreen()),
     'Documents': (googleUser, const DocumentsScreen()),
     'Upload': (googleUser, const UploadScreen()),
     'Processing': (
@@ -106,17 +106,10 @@ void main() {
       googleUser,
       const DocumentDetailScreen(documentId: 'doc-1'),
     ),
-    'Document detail as a guest': (
-      guestUser,
-      const DocumentDetailScreen(documentId: 'doc-1'),
-    ),
     'Summary': (googleUser, const SummaryScreen(documentId: 'doc-1')),
     'Chat': (googleUser, const ChatScreen(documentId: 'doc-1')),
-    'Chat as a guest': (guestUser, const ChatScreen(documentId: 'doc-1')),
     'Profile': (googleUser, const ProfileScreen()),
-    'Profile as a guest': (guestUser, const ProfileScreen()),
     'Settings': (googleUser, const SettingsScreen()),
-    'Pro': (googleUser, const ProScreen()),
   };
 
   for (final MapEntry(key: name, value: (user, screen)) in screens.entries) {

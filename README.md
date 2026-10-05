@@ -47,7 +47,7 @@ lib/
     home/        bottom navigation shell, Home
     documents/   list, upload, processing, detail, summary
     chat/        chat with a document
-    profile/     profile, settings, Pro plan
+    profile/     profile, settings
     viewer/      PDF viewer, editor (pen, highlight, text, signature), page organiser
 ```
 

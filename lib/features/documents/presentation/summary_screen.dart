@@ -7,6 +7,7 @@ import '../../../core/layout/responsive.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../../auth/application/auth_controller.dart';
 import '../data/document.dart';
 import '../data/documents_repository.dart';
 
@@ -22,7 +23,9 @@ class SummaryScreen extends ConsumerWidget {
     // The detail screen's button reads "View Summary" once one exists
     ref.listen(documentSummaryProvider(documentId), (previous, next) {
       if (!(previous?.hasValue ?? false) && next.hasValue) {
-        ref.invalidate(documentDetailProvider(documentId));
+        ref
+          ..invalidate(documentDetailProvider(documentId))
+          ..invalidate(usageProvider);
       }
     });
 
@@ -35,11 +38,22 @@ class SummaryScreen extends ConsumerWidget {
         child: SafeArea(
           child: summary.when(
             loading: () => const LoadingView(label: 'Generating summary…'),
-            error: (error, _) => MessageView.error(
-              message: errorMessage(error),
-              onRetry: () =>
-                  ref.invalidate(documentSummaryProvider(documentId)),
-            ),
+            error: (error, _) =>
+                error is ApiException && error.isFinalForToday
+                ? MessageView(
+                    icon: Icons.schedule_rounded,
+                    title: error.isDailyLimit
+                        ? 'Daily limit reached'
+                        : 'Summary not available',
+                    message: error.message,
+                    actionLabel: 'Go back',
+                    onAction: () => Navigator.of(context).maybePop(),
+                  )
+                : MessageView.error(
+                    message: errorMessage(error),
+                    onRetry: () =>
+                        ref.invalidate(documentSummaryProvider(documentId)),
+                  ),
             data: (summary) => _SummaryBody(title: title, summary: summary),
           ),
         ),

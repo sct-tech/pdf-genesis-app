@@ -10,8 +10,6 @@ import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/app_widgets.dart';
-import '../../chat/application/ask_ai_access.dart';
-import '../../chat/presentation/ask_ai_sign_in.dart';
 import '../../documents/data/document.dart';
 import '../../documents/data/documents_repository.dart';
 import '../../documents/data/pdf_file_store.dart';
@@ -125,10 +123,6 @@ class _PdfViewerScreenState extends ConsumerState<PdfViewerScreen> {
   }
 
   void _askAi(Document? document) {
-    if (!ref.read(askAiAvailableProvider)) {
-      showAskAiSignInSheet(context, ref);
-      return;
-    }
     if (document == null || !document.isReady) {
       showAppSnackBar(
         context,
@@ -460,8 +454,7 @@ class _PdfViewerScreenState extends ConsumerState<PdfViewerScreen> {
             bottom: 0,
             child: IgnorePointer(
               ignoring: _saving,
-              child: ContentWidth(
-                maxWidth: ContentWidths.toolbar,
+              child: ContentWidth.bar(
                 child: EditOptionsStrip(
                   session: _session,
                   onNewSignature: _newSignature,
@@ -475,8 +468,7 @@ class _PdfViewerScreenState extends ConsumerState<PdfViewerScreen> {
             right: 16,
             bottom: 16,
             child: SafeArea(
-              child: ContentWidth(
-                maxWidth: ContentWidths.toolbar,
+              child: ContentWidth.bar(
                 child: ViewerActionBar(
                   onPages: () => _organise(local),
                   onEdit: () {
@@ -485,7 +477,6 @@ class _PdfViewerScreenState extends ConsumerState<PdfViewerScreen> {
                   },
                   onShare: () => _share(local, document?.title ?? 'Document'),
                   onAskAi: () => _askAi(document),
-                  askAiLocked: !ref.watch(askAiAvailableProvider),
                 ),
               ),
             ),
@@ -550,8 +541,7 @@ class _PdfViewerScreenState extends ConsumerState<PdfViewerScreen> {
                     ),
                     child: IgnorePointer(
                       ignoring: _saving,
-                      child: ContentWidth(
-                        maxWidth: ContentWidths.toolbar,
+                      child: ContentWidth.bar(
                         child: EditToolBar(
                           session: _session,
                           onSelect: _selectTool,

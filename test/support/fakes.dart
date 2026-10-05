@@ -10,6 +10,8 @@ import 'package:pdf_genesis/core/storage/token_storage.dart';
 import 'package:pdf_genesis/core/theme/app_theme.dart';
 import 'package:pdf_genesis/features/auth/application/auth_controller.dart';
 import 'package:pdf_genesis/features/auth/data/app_user.dart';
+import 'package:pdf_genesis/features/chat/data/chat_models.dart';
+import 'package:pdf_genesis/features/chat/data/chat_repository.dart';
 import 'package:pdf_genesis/features/documents/data/document.dart';
 
 class FakeTokenStorage implements TokenStorage {
@@ -86,11 +88,7 @@ const googleUser = AppUser(
   id: 'user-1',
   name: 'Milan Patel',
   email: 'milan@example.com',
-  isGuest: false,
-  isPro: false,
 );
-
-const guestUser = AppUser(id: 'guest-1', isGuest: true, isPro: false);
 
 Document document({
   String id = 'doc-1',
@@ -99,6 +97,8 @@ Document document({
   int? pageCount = 42,
   String? stage,
   String? error,
+  bool hasSummary = false,
+  List<String> suggestedQuestions = const [],
 }) {
   return Document(
     id: id,
@@ -108,6 +108,8 @@ Document document({
     status: status,
     stage: stage,
     error: error,
+    hasSummary: hasSummary,
+    suggestedQuestions: suggestedQuestions,
     createdAt: DateTime(2026, 10, 2),
   );
 }
@@ -128,6 +130,8 @@ Future<void> pumpScreen(
   await tester.pumpWidget(
     ProviderScope(
       overrides: overrides,
+      // As in the app
+      retry: (retryCount, error) => null,
       child: MaterialApp(
         theme: AppTheme.light,
         builder: (context, app) => MediaQuery.withClampedTextScaling(
@@ -145,3 +149,81 @@ Future<void> pumpScreen(
 /// Unmounts the tree so periodic timers started by a screen are cancelled.
 Future<void> unmount(WidgetTester tester) =>
     tester.pumpWidget(const SizedBox.shrink());
+
+/// Chat backend held in memory: conversations by id, newest first.
+class FakeChatRepository implements ChatRepository {
+  FakeChatRepository({
+    Map<String, List<ChatMessage>>? conversations,
+    this.failListing = false,
+    this.questionsLeft,
+    this.sendError,
+  }) : threads = {...?conversations};
+
+  /// Insertion order is "most recently used first".
+  final Map<String, List<ChatMessage>> threads;
+  final bool failListing;
+
+  /// Allowance before the next question; each answer takes one.
+  int? questionsLeft;
+
+  /// Thrown by [send] instead of answering.
+  final Object? sendError;
+  final List<String> created = [];
+  final List<({String conversationId, String content})> sent = [];
+
+  @override
+  Future<List<ConversationPreview>> conversations(String documentId) async {
+    if (failListing) throw Exception('offline');
+    return [
+      for (final MapEntry(key: id, value: messages) in threads.entries)
+        ConversationPreview(
+          id: id,
+          title: messages.isEmpty ? 'New chat' : messages.first.content,
+          updatedAt: DateTime(2026, 10, 5),
+          lastMessage: messages.lastOrNull?.content,
+        ),
+    ];
+  }
+
+  @override
+  Future<List<ChatMessage>> messages(String conversationId) async =>
+      threads[conversationId] ?? const [];
+
+  @override
+  Future<String> createConversation(String documentId) async {
+    final id = 'new-${created.length + 1}';
+    created.add(id);
+    threads[id] = [];
+    return id;
+  }
+
+  @override
+  Future<ChatReply> send(String conversationId, String content) async {
+    if (sendError != null) throw sendError!;
+    sent.add((conversationId: conversationId, content: content));
+    final number = sent.length;
+    if (questionsLeft != null) questionsLeft = questionsLeft! - 1;
+    final reply = ChatReply(
+      userMessage: ChatMessage(id: 'u$number', isUser: true, content: content),
+      assistantMessage: ChatMessage(
+        id: 'a$number',
+        isUser: false,
+        content: 'Answer to: $content',
+      ),
+      followUpQuestions: const [],
+      questionsLeftToday: questionsLeft,
+    );
+    threads[conversationId] = [
+      ...?threads[conversationId],
+      reply.userMessage,
+      reply.assistantMessage,
+    ];
+    return reply;
+  }
+
+  @override
+  Future<void> clearAll() async => threads.clear();
+}
+
+ChatMessage chatMessage(String id, String content, {bool isUser = false}) =>
+    ChatMessage(id: id, isUser: isUser, content: content);

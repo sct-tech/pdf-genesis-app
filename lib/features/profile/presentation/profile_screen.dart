@@ -10,28 +10,11 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../auth/data/app_user.dart';
-import '../../auth/presentation/google_sign_in_flow.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
 
-  Future<void> _signOut(
-    BuildContext context,
-    WidgetRef ref,
-    AppUser user,
-  ) async {
-    // A guest account cannot be signed back into, so signing out loses it
-    if (user.isGuest) {
-      final confirmed = await confirmDestructive(
-        context,
-        title: 'Leave guest mode?',
-        message:
-            'Guest documents cannot be recovered after you sign out. Sign in '
-            'with Google first to keep them.',
-        confirmLabel: 'Sign out',
-      );
-      if (!confirmed) return;
-    }
+  Future<void> _signOut(BuildContext context, WidgetRef ref) async {
     // The router sends the user to login once the session is gone
     try {
       await ref.read(authControllerProvider.notifier).signOut();
@@ -90,44 +73,9 @@ class ProfileScreen extends ConsumerWidget {
                         ],
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Pill(
-                      label: user.planLabel,
-                      foreground: AppColors.primary,
-                      background: AppColors.primaryTint,
-                    ),
                   ],
                 ),
               ),
-              if (user.isGuest) ...[
-                const SizedBox(height: 12),
-                AppCard(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Keep your documents', style: text.titleMedium),
-                      const SizedBox(height: 4),
-                      Text(
-                        'You are using a guest account. Sign in with Google to '
-                        'keep your PDFs and conversations.',
-                        style: text.bodySmall,
-                      ),
-                      const SizedBox(height: 12),
-                      OutlinedButton(
-                        onPressed: () => signInWithGoogleFlow(context, ref),
-                        style: OutlinedButton.styleFrom(
-                          minimumSize: const Size.fromHeight(44),
-                        ),
-                        child: const Text('Continue with Google'),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-              if (!user.isPro) ...[
-                const SizedBox(height: 12),
-                _UpgradeBanner(onTap: () => context.push(Routes.pro)),
-              ],
               const SizedBox(height: 12),
               AppCard(
                 child: usage.when(
@@ -179,7 +127,7 @@ class ProfileScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 16),
               TextButton.icon(
-                onPressed: () => _signOut(context, ref, user),
+                onPressed: () => _signOut(context, ref),
                 style: TextButton.styleFrom(foregroundColor: AppColors.danger),
                 icon: const Icon(Icons.logout_rounded, size: 18),
                 label: const Text('Sign out'),
@@ -191,67 +139,6 @@ class ProfileScreen extends ConsumerWidget {
                 ),
               ),
             ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _UpgradeBanner extends StatelessWidget {
-  const _UpgradeBanner({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final text = Theme.of(context).textTheme;
-    return Material(
-      borderRadius: BorderRadius.circular(16),
-      clipBehavior: Clip.antiAlias,
-      child: Ink(
-        decoration: const BoxDecoration(gradient: AppColors.brandGradient),
-        child: InkWell(
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Upgrade to Pro',
-                        style: text.titleLarge?.copyWith(color: Colors.white),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Store up to ${AppConfig.proMaxDocuments} PDFs',
-                        style: text.bodyMedium?.copyWith(
-                          color: Colors.white.withValues(alpha: 0.9),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 10,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    'Upgrade',
-                    style: text.labelLarge?.copyWith(color: AppColors.primary),
-                  ),
-                ),
-              ],
-            ),
           ),
         ),
       ),
@@ -299,7 +186,7 @@ class _UsageBody extends StatelessWidget {
         if (usage.atDocumentLimit) ...[
           const SizedBox(height: 8),
           Text(
-            'You have reached your plan limit. Delete a PDF to upload another.',
+            'You have reached the limit. Delete a PDF to upload another.',
             style: text.bodySmall?.copyWith(color: AppColors.danger),
           ),
         ],

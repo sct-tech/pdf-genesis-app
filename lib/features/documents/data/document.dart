@@ -49,6 +49,7 @@ class Document {
     this.stage,
     this.error,
     this.hasSummary = false,
+    this.suggestedQuestions = const [],
     this.recentConversations = const [],
   });
 
@@ -64,6 +65,11 @@ class Document {
       error: json['processingError'] as String?,
       createdAt: DateTime.parse(json['createdAt'] as String),
       hasSummary: (json['hasSummary'] as bool?) ?? false,
+      suggestedQuestions: [
+        for (final question
+            in (json['suggestedQuestions'] as List<dynamic>? ?? const []))
+          question as String,
+      ],
       recentConversations: [
         for (final item in conversations ?? const [])
           ConversationPreview.fromJson(item as Map<String, dynamic>),
@@ -84,6 +90,9 @@ class Document {
   final String? error;
   final DateTime createdAt;
   final bool hasSummary;
+
+  /// Empty until the document has been used with Ask AI.
+  final List<String> suggestedQuestions;
   final List<ConversationPreview> recentConversations;
 
   bool get isReady => status == ProcessingStatus.ready;

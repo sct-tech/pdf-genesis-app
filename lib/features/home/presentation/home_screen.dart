@@ -11,8 +11,6 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../auth/application/auth_controller.dart';
-import '../../chat/application/ask_ai_access.dart';
-import '../../chat/presentation/ask_ai_sign_in.dart';
 import '../../documents/data/document.dart';
 import '../../documents/data/documents_repository.dart';
 import '../../documents/presentation/document_widgets.dart';
@@ -32,11 +30,9 @@ class HomeScreen extends ConsumerWidget {
     final documents = ref.watch(recentDocumentsProvider);
     final anyInProgress =
         documents.value?.any((document) => document.isInProgress) ?? false;
-    final banner = ref
-        .watch(adsProvider)
-        .banner(placement: 'home', isPro: user?.isPro ?? false);
+    final banner = ref.watch(adsProvider).banner(placement: 'home');
 
-    final name = user == null || user.isGuest ? '' : ', ${user.firstName}';
+    final name = user == null ? '' : ', ${user.firstName}';
 
     final intro = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -251,7 +247,6 @@ class _RecentDocumentCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final text = Theme.of(context).textTheme;
     final ready = document.isReady;
-    final canAskAi = ref.watch(askAiAvailableProvider);
 
     return AppCard(
       padding: EdgeInsets.zero,
@@ -297,10 +292,7 @@ class _RecentDocumentCard extends ConsumerWidget {
               _QuickAction(
                 icon: Icons.chat_bubble_outline_rounded,
                 label: 'Chat',
-                muted: !canAskAi,
-                onTap: !canAskAi
-                    ? () => showAskAiSignInSheet(context, ref)
-                    : ready
+                onTap: ready
                     ? () => context.push(Routes.chat(document.id))
                     : null,
               ),
@@ -325,25 +317,15 @@ class _RecentDocumentCard extends ConsumerWidget {
 }
 
 class _QuickAction extends StatelessWidget {
-  const _QuickAction({
-    required this.icon,
-    required this.label,
-    this.onTap,
-    this.muted = false,
-  });
+  const _QuickAction({required this.icon, required this.label, this.onTap});
 
   final IconData icon;
   final String label;
   final VoidCallback? onTap;
 
-  /// Drawn as unavailable while still tappable, so the tap can explain why.
-  final bool muted;
-
   @override
   Widget build(BuildContext context) {
-    final color = onTap == null || muted
-        ? AppColors.textSubtle
-        : AppColors.textPrimary;
+    final color = onTap == null ? AppColors.textSubtle : AppColors.textPrimary;
     return Expanded(
       child: InkWell(
         onTap: onTap,

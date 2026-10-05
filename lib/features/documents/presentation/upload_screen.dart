@@ -146,25 +146,20 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
     }
   }
 
-  Future<void> _showLimitDialog(String message) async {
-    final upgrade = await showDialog<bool>(
+  Future<void> _showLimitDialog(String message) {
+    return showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('PDF limit reached'),
         content: Text(message),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Not now'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('See Pro'),
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('OK'),
           ),
         ],
       ),
     );
-    if ((upgrade ?? false) && mounted) context.push(Routes.pro);
   }
 
   @override

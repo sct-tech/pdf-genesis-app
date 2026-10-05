@@ -150,7 +150,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
                     return RefreshIndicator(
                       onRefresh: () =>
                           ref.refresh(documentsListProvider(_query).future),
-                      // A plan holds a handful of documents, so the list
+                      // An account holds a handful of documents, so the list
                       // does not need to be lazy
                       child: ListView(
                         padding: const EdgeInsets.fromLTRB(16, 4, 16, 96),

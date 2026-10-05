@@ -9,15 +9,18 @@ import '../../../core/services/analytics_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/app_widgets.dart';
-import '../../auth/presentation/google_sign_in_flow.dart';
+import '../../auth/application/auth_controller.dart';
 import '../../documents/data/documents_repository.dart';
-import '../application/ask_ai_access.dart';
 import '../data/chat_models.dart';
 import '../data/chat_repository.dart';
-import 'ask_ai_sign_in.dart';
+import 'chat_history_sheet.dart';
 
 /// Conversation about one document. Chat is always tied to a document, so
 /// this screen is reached from a document, never from a global tab.
+///
+/// Opening it continues the most recent conversation, so earlier questions
+/// and answers are still there. The history button lists the others and
+/// starts a new one.
 class ChatScreen extends ConsumerStatefulWidget {
   const ChatScreen({
     super.key,
@@ -28,7 +31,7 @@ class ChatScreen extends ConsumerStatefulWidget {
 
   final String documentId;
 
-  /// Resume this conversation; a new one is created on the first question.
+  /// Open this conversation instead of the most recent one.
   final String? conversationId;
 
   /// Sent as soon as the screen opens (a tapped suggested question).
@@ -56,21 +59,42 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   String? _failedQuestion;
   String? _sendError;
 
+  /// False when the failure is one that asking again today cannot fix.
+  bool _canRetry = true;
+
+  /// Questions left in today's allowance, once the API has reported it.
+  int? _questionsLeft;
+  int? _questionsLimit;
+
   bool get _sending => _pendingQuestion != null;
+
+  bool get _outOfQuestions => _questionsLeft == 0;
 
   @override
   void initState() {
     super.initState();
     _conversationId = widget.conversationId;
-    // A guest sees the sign-in prompt instead; nothing is loaded or sent
-    if (!ref.read(askAiAvailableProvider)) return;
-    if (_conversationId != null) {
-      _loadHistory();
-    } else if (widget.initialQuestion != null) {
-      WidgetsBinding.instance.addPostFrameCallback(
-        (_) => _send(widget.initialQuestion!),
-      );
-    }
+    _begin();
+  }
+
+  Future<void> _begin() async {
+    // The allowance is known before the first frame of the conversation, so
+    // an exhausted one never shows as askable
+    await Future.wait([_loadAllowance(), _restore()]);
+    final question = widget.initialQuestion;
+    if (question != null && mounted && _historyError == null) _send(question);
+  }
+
+  /// Best effort: the chat works without the count, it only loses the hint.
+  Future<void> _loadAllowance() async {
+    try {
+      final usage = await ref.read(usageProvider.future);
+      if (!mounted) return;
+      setState(() {
+        _questionsLeft = usage.questionsLeft;
+        _questionsLimit = usage.questionsLimit;
+      });
+    } catch (_) {}
   }
 
   @override
@@ -80,22 +104,63 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     super.dispose();
   }
 
-  Future<void> _loadHistory() async {
+  /// Loads the conversation to show: the one asked for, else the most
+  /// recent one about this document, else none (a new chat).
+  Future<void> _restore() async {
     setState(() {
       _loadingHistory = true;
       _historyError = null;
     });
     try {
-      final messages = await ref
-          .read(chatRepositoryProvider)
-          .messages(_conversationId!);
+      final repository = ref.read(chatRepositoryProvider);
+      var id = _conversationId;
+      if (id == null) {
+        final conversations = await repository.conversations(widget.documentId);
+        id = conversations.firstOrNull?.id;
+      }
+      final messages = id == null
+          ? const <ChatMessage>[]
+          : await repository.messages(id);
       if (!mounted) return;
-      setState(() => _messages.addAll(messages));
+      setState(() {
+        _conversationId = id;
+        _messages
+          ..clear()
+          ..addAll(messages);
+      });
       _scrollToEnd();
     } catch (error) {
       if (mounted) setState(() => _historyError = error);
     } finally {
       if (mounted) setState(() => _loadingHistory = false);
+    }
+  }
+
+  void _resetThread(String? conversationId) {
+    _conversationId = conversationId;
+    _messages.clear();
+    _followUps = const [];
+    _failedQuestion = null;
+    _sendError = null;
+    _canRetry = true;
+  }
+
+  void _startNewChat() => setState(() => _resetThread(null));
+
+  Future<void> _openHistory() async {
+    final choice = await showChatHistorySheet(
+      context,
+      documentId: widget.documentId,
+      currentId: _conversationId,
+    );
+    if (choice == null || !mounted) return;
+    switch (choice) {
+      case NewChat():
+        _startNewChat();
+      case OpenConversation(:final id):
+        if (id == _conversationId) return;
+        setState(() => _resetThread(id));
+        await _restore();
     }
   }
 
@@ -119,6 +184,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       _pendingQuestion = question;
       _failedQuestion = null;
       _sendError = null;
+      _canRetry = true;
       _followUps = const [];
     });
     _scrollToEnd();
@@ -137,13 +203,22 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           ..add(reply.assistantMessage);
         _followUps = reply.followUpQuestions;
         _pendingQuestion = null;
+        _questionsLeft = reply.questionsLeftToday ?? _questionsLeft;
       });
+      ref.invalidate(usageProvider);
     } catch (error) {
       if (!mounted) return;
+      final api = error is ApiException ? error : null;
       setState(() {
         _pendingQuestion = null;
+        if (api?.isDailyLimit ?? false) {
+          // The limit bar takes over from the input and says why
+          _questionsLeft = 0;
+          return;
+        }
         _failedQuestion = question;
         _sendError = errorMessage(error);
+        _canRetry = !(api?.isFinalForToday ?? false);
       });
     }
     _scrollToEnd();
@@ -173,42 +248,55 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             ),
           ],
         ),
+        actions: [
+          IconButton(
+            tooltip: 'New chat',
+            // Nothing to start over from while the chat is still empty
+            onPressed: _sending || _loadingHistory || isEmpty
+                ? null
+                : _startNewChat,
+            icon: const Icon(Icons.add_comment_outlined),
+          ),
+          IconButton(
+            tooltip: 'Chat history',
+            onPressed: _sending || _loadingHistory ? null : _openHistory,
+            icon: const Icon(Icons.history_rounded),
+          ),
+        ],
       ),
       body: ContentWidth(
         maxWidth: ContentWidths.chat,
         child: SafeArea(
-          child: !ref.watch(askAiAvailableProvider)
-              ? MessageView(
-                  icon: Icons.lock_outline_rounded,
-                  title: askAiSignInTitle,
-                  message: askAiSignInMessage,
-                  actionLabel: 'Continue with Google',
-                  onAction: () => signInWithGoogleFlow(context, ref),
-                )
-              : Column(
-                  children: [
-                    Expanded(
-                      child: _loadingHistory
-                          ? const LoadingView()
-                          : _historyError != null
-                          ? MessageView.error(
-                              message: errorMessage(_historyError!),
-                              onRetry: _loadHistory,
-                            )
-                          : isEmpty
-                          ? _EmptyChat(
-                              documentId: widget.documentId,
-                              onPick: _send,
-                            )
-                          : _buildMessages(),
-                    ),
-                    _InputBar(
-                      controller: _input,
-                      sending: _sending,
-                      onSend: _send,
-                    ),
-                  ],
-                ),
+          child: Column(
+            children: [
+              Expanded(
+                child: _loadingHistory
+                    ? const LoadingView()
+                    : _historyError != null
+                    ? MessageView.error(
+                        message: errorMessage(_historyError!),
+                        onRetry: _restore,
+                      )
+                    : isEmpty
+                    ? _EmptyChat(
+                        documentId: widget.documentId,
+                        canAsk: !_outOfQuestions,
+                        onPick: _send,
+                      )
+                    : _buildMessages(),
+              ),
+              if (_outOfQuestions)
+                _LimitReachedBar(limit: _questionsLimit)
+              else ...[
+                if (_questionsLeft != null)
+                  _AllowanceHint(
+                    left: _questionsLeft!,
+                    limit: _questionsLimit,
+                  ),
+                _InputBar(controller: _input, sending: _sending, onSend: _send),
+              ],
+            ],
+          ),
         ),
       ),
     );
@@ -231,10 +319,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           _UserBubble(text: _failedQuestion!, failed: true),
           _RetryRow(
             message: _sendError ?? 'Could not get an answer.',
-            onRetry: () => _send(_failedQuestion!),
+            onRetry: _canRetry ? () => _send(_failedQuestion!) : null,
           ),
         ],
-        if (_followUps.isNotEmpty && !_sending)
+        if (_followUps.isNotEmpty && !_sending && !_outOfQuestions)
           Padding(
             padding: const EdgeInsets.only(top: 4),
             child: Wrap(
@@ -255,16 +343,25 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 }
 
 class _EmptyChat extends ConsumerWidget {
-  const _EmptyChat({required this.documentId, required this.onPick});
+  const _EmptyChat({
+    required this.documentId,
+    required this.canAsk,
+    required this.onPick,
+  });
 
   final String documentId;
+
+  /// False once today's questions are used: nothing is offered to tap, and
+  /// the document is not prepared for questions that cannot be asked.
+  final bool canAsk;
   final ValueChanged<String> onPick;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final text = Theme.of(context).textTheme;
-    final questions =
-        ref.watch(suggestedQuestionsProvider(documentId)).value ?? const [];
+    final questions = canAsk
+        ? ref.watch(suggestedQuestionsProvider(documentId)).value ?? const []
+        : const <String>[];
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(24, 40, 24, 16),
@@ -484,7 +581,9 @@ class _RetryRow extends StatelessWidget {
   const _RetryRow({required this.message, required this.onRetry});
 
   final String message;
-  final VoidCallback onRetry;
+
+  /// Null when asking again cannot help, which hides the button.
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -505,7 +604,93 @@ class _RetryRow extends StatelessWidget {
                   ?.copyWith(color: AppColors.danger),
             ),
           ),
-          TextButton(onPressed: onRetry, child: const Text('Retry')),
+          if (onRetry != null)
+            TextButton(onPressed: onRetry, child: const Text('Retry')),
+        ],
+      ),
+    );
+  }
+}
+
+/// How much of today's free allowance is left, shown above the input.
+class _AllowanceHint extends StatelessWidget {
+  const _AllowanceHint({required this.left, required this.limit});
+
+  final int left;
+  final int? limit;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = limit == null
+        ? '$left free ${left == 1 ? 'question' : 'questions'} left today'
+        : '$left of $limit free questions left today';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.bolt_rounded, size: 14, color: AppColors.textSubtle),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Text(
+              label,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Takes the place of the input once today's questions are used.
+class _LimitReachedBar extends StatelessWidget {
+  const _LimitReachedBar({required this.limit});
+
+  final int? limit;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    final asked = limit == null
+        ? "today's free questions"
+        : "today's $limit free questions";
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        border: Border(top: BorderSide(color: AppColors.border)),
+      ),
+      child: Row(
+        children: [
+          const CircleAvatar(
+            radius: 20,
+            backgroundColor: AppColors.primaryTint,
+            child: Icon(
+              Icons.schedule_rounded,
+              size: 20,
+              color: AppColors.primary,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Daily limit reached', style: text.titleSmall),
+                const SizedBox(height: 2),
+                Text(
+                  'You have asked $asked. You can ask again tomorrow.',
+                  style: text.bodySmall?.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );

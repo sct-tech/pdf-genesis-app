@@ -44,7 +44,4 @@ class AppConfig {
   static const maxPdfSizeMb = 50;
   static const maxPdfBytes = maxPdfSizeMb * 1024 * 1024;
   static const maxPdfPages = 500;
-
-  static const freeMaxDocuments = 3;
-  static const proMaxDocuments = 10;
 }

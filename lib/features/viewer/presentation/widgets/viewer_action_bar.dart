@@ -11,17 +11,12 @@ class ViewerActionBar extends StatelessWidget {
     required this.onEdit,
     required this.onShare,
     required this.onAskAi,
-    this.askAiLocked = false,
   });
 
   final VoidCallback onPages;
   final VoidCallback onEdit;
   final VoidCallback onShare;
   final VoidCallback onAskAi;
-
-  /// Shows Ask AI as unavailable; a tap still reaches [onAskAi] so the
-  /// screen can explain why.
-  final bool askAiLocked;
 
   @override
   Widget build(BuildContext context) {
@@ -75,14 +70,9 @@ class ViewerActionBar extends StatelessWidget {
                   minimumSize: const Size(0, 44),
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   shape: const StadiumBorder(),
-                  backgroundColor: askAiLocked ? AppColors.border : null,
-                  foregroundColor: askAiLocked ? AppColors.textSubtle : null,
                 ),
                 onPressed: onAskAi,
-                icon: Icon(
-                  askAiLocked ? Icons.lock_outline_rounded : Icons.auto_awesome,
-                  size: 18,
-                ),
+                icon: const Icon(Icons.auto_awesome, size: 18),
                 label: const Text('Ask AI'),
               ),
             ],

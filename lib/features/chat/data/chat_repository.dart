@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_client.dart';
+import '../../documents/data/document.dart';
 import 'chat_models.dart';
 
 class ChatRepository {
@@ -15,6 +16,18 @@ class ChatRepository {
       body: {'documentId': documentId},
     ) as Map<String, dynamic>;
     return data['id'] as String;
+  }
+
+  /// Conversations about one document, most recently used first.
+  Future<List<ConversationPreview>> conversations(String documentId) async {
+    final data = await _api.get(
+      '/conversations',
+      query: {'documentId': documentId, 'limit': 50},
+    );
+    return [
+      for (final item in (data as List<dynamic>? ?? const []))
+        ConversationPreview.fromJson(item as Map<String, dynamic>),
+    ];
   }
 
   Future<List<ChatMessage>> messages(String conversationId) async {
