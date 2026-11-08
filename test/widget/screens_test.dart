@@ -424,6 +424,8 @@ void main() {
 
     expect(find.text('Generating summary…'), findsNothing);
     expect(find.text('Daily limit reached'), findsOneWidget);
+    // Nothing to report until there is a summary
+    expect(find.byTooltip('Report summary'), findsNothing);
     expect(
       find.text(
         "You have used today's summary. A new one is available tomorrow.",
@@ -459,6 +461,7 @@ void main() {
     expect(find.text('Churn fell to 1.1%'), findsOneWidget);
     expect(find.text('Copy'), findsOneWidget);
     expect(find.text('Share'), findsOneWidget);
+    expect(find.byTooltip('Report summary'), findsOneWidget);
     expect(find.textContaining('Export'), findsNothing);
   });
 

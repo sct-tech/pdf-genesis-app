@@ -11,6 +11,8 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../documents/data/documents_repository.dart';
+import '../../reports/data/report_repository.dart';
+import '../../reports/presentation/report_sheet.dart';
 import '../data/chat_models.dart';
 import '../data/chat_repository.dart';
 import 'chat_history_sheet.dart';
@@ -531,20 +533,33 @@ class _AssistantBubble extends StatelessWidget {
               ],
             ),
           ],
-          Align(
-            alignment: Alignment.centerLeft,
-            child: IconButton(
-              onPressed: () => _copy(context),
-              tooltip: 'Copy answer',
-              visualDensity: VisualDensity.compact,
-              padding: EdgeInsets.zero,
-              alignment: Alignment.centerLeft,
-              icon: const Icon(
-                Icons.copy_rounded,
-                size: 18,
-                color: AppColors.textSecondary,
+          Row(
+            children: [
+              IconButton(
+                onPressed: () => _copy(context),
+                tooltip: 'Copy answer',
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                alignment: Alignment.centerLeft,
+                icon: const Icon(
+                  Icons.copy_rounded,
+                  size: 18,
+                  color: AppColors.textSecondary,
+                ),
               ),
-            ),
+              IconButton(
+                onPressed: () =>
+                    showReportSheet(context, AnswerReport(message.id)),
+                tooltip: 'Report answer',
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                icon: const Icon(
+                  Icons.flag_outlined,
+                  size: 18,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
           ),
         ],
       ),

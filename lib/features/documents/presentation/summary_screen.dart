@@ -8,6 +8,8 @@ import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../auth/application/auth_controller.dart';
+import '../../reports/data/report_repository.dart';
+import '../../reports/presentation/report_sheet.dart';
 import '../data/document.dart';
 import '../data/documents_repository.dart';
 
@@ -33,7 +35,18 @@ class SummaryScreen extends ConsumerWidget {
         ref.watch(documentDetailProvider(documentId)).value?.title ?? 'Summary';
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Summary')),
+      appBar: AppBar(
+        title: const Text('Summary'),
+        actions: [
+          if (summary.hasValue)
+            IconButton(
+              onPressed: () =>
+                  showReportSheet(context, SummaryReport(documentId)),
+              tooltip: 'Report summary',
+              icon: const Icon(Icons.flag_outlined),
+            ),
+        ],
+      ),
       body: ContentWidth(
         child: SafeArea(
           child: summary.when(

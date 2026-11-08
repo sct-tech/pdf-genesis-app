@@ -8,9 +8,16 @@ class AppConfig {
   /// default API address only exists on the Android emulator and is not
   /// encrypted.
   static void validate() {
-    if (kReleaseMode && !apiBaseUrl.startsWith('https://')) {
+    if (!kReleaseMode) return;
+    if (!apiBaseUrl.startsWith('https://')) {
       throw StateError(
         'Release builds need --dart-define=API_BASE_URL=https://...',
+      );
+    }
+    // Without it Google returns no ID token on Android and nobody can sign in
+    if (googleServerClientId.isEmpty) {
+      throw StateError(
+        'Release builds need --dart-define=GOOGLE_SERVER_CLIENT_ID=...',
       );
     }
   }
@@ -19,10 +26,14 @@ class AppConfig {
   static const tagline = 'Ask Anything From PDF';
   static const version = '1.0.0';
 
-  /// 10.0.2.2 is the host machine as seen from the Android emulator.
+  static const productionApiBaseUrl =
+      'https://pdf-genesis-backend.sct.technology';
+
+  /// Release builds talk to production; debug builds to the local API at
+  /// 10.0.2.2, the host machine as seen from the Android emulator.
   static const apiBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://10.0.2.2:8190',
+    defaultValue: kReleaseMode ? productionApiBaseUrl : 'http://10.0.2.2:8190',
   );
 
   /// OAuth "Web application" client ID; the backend verifies ID tokens
